@@ -40,6 +40,10 @@ async function restoreCache() {
       );
     }
 
+    console.log("useRepositoryFolder", useRepositoryFolder);
+    console.log("repositoryName", repositoryName);
+    console.log(process.env.GITHUB_REPOSITORY, process.env.GITHUB_REPOSITORY);
+
     try {
       // Inputs are re-evaluted before the post action, so we want to store the original values
       core.saveState(State.PrimaryKey, key);
