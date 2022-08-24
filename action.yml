@@ -40,8 +40,8 @@ inputs:
     description: "Use github actions/cache as fallback"
     required: false
     default: "true"
-  use-repository-folder:
-    description: "Save the cache to the folder named after the repository, instead of a root of s3."
+  use-repository-prefix:
+    description: "Prefix the key and restore keys with repository name"
     required: false
     default: "false"
   # zip-option:

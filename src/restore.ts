@@ -22,7 +22,7 @@ async function restoreCache() {
     const bucket = core.getInput("bucket", { required: true });
     const keyInput = core.getInput("key", { required: true });
     const useFallback = getInputAsBoolean("use-fallback");
-    const useRepositoryFolder = getInputAsBoolean("use-repository-folder");
+    const useRepositoryPrefix = getInputAsBoolean("use-repository-prefix");
     const paths = getInputAsArray("path");
     const restoreKeysInput = getInputAsArray("restore-keys");
 
@@ -30,19 +30,15 @@ async function restoreCache() {
     let restoreKeys = restoreKeysInput;
 
     const repositoryName = process.env.GITHUB_REPOSITORY?.replace(
-      `${process.env.GITHUB_REPOSITORY || ""}/`,
+      `${process.env.GITHUB_REPOSITORY_OWNER || ""}/`,
       ""
     );
-    if (useRepositoryFolder && repositoryName) {
-      key = `${repositoryName}/${keyInput}`;
+    if (useRepositoryPrefix && repositoryName) {
+      key = `${repositoryName}-${keyInput}`;
       restoreKeys = restoreKeysInput.map(
-        (restoreKey) => `${repositoryName}/${restoreKey}`
+        (restoreKey) => `${repositoryName}-${restoreKey}`
       );
     }
-
-    console.log("useRepositoryFolder", useRepositoryFolder);
-    console.log("repositoryName", repositoryName);
-    console.log(process.env.GITHUB_REPOSITORY, process.env.GITHUB_REPOSITORY);
 
     try {
       // Inputs are re-evaluted before the post action, so we want to store the original values

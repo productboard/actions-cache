@@ -82061,19 +82061,16 @@ function restoreCache() {
             const bucket = core.getInput("bucket", { required: true });
             const keyInput = core.getInput("key", { required: true });
             const useFallback = utils_1.getInputAsBoolean("use-fallback");
-            const useRepositoryFolder = utils_1.getInputAsBoolean("use-repository-folder");
+            const useRepositoryPrefix = utils_1.getInputAsBoolean("use-repository-prefix");
             const paths = utils_1.getInputAsArray("path");
             const restoreKeysInput = utils_1.getInputAsArray("restore-keys");
             let key = keyInput;
             let restoreKeys = restoreKeysInput;
-            const repositoryName = (_a = process.env.GITHUB_REPOSITORY) === null || _a === void 0 ? void 0 : _a.replace(`${process.env.GITHUB_REPOSITORY || ""}/`, "");
-            if (useRepositoryFolder && repositoryName) {
-                key = `${repositoryName}/${keyInput}`;
-                restoreKeys = restoreKeysInput.map((restoreKey) => `${repositoryName}/${restoreKey}`);
+            const repositoryName = (_a = process.env.GITHUB_REPOSITORY) === null || _a === void 0 ? void 0 : _a.replace(`${process.env.GITHUB_REPOSITORY_OWNER || ""}/`, "");
+            if (useRepositoryPrefix && repositoryName) {
+                key = `${repositoryName}-${keyInput}`;
+                restoreKeys = restoreKeysInput.map((restoreKey) => `${repositoryName}-${restoreKey}`);
             }
-            console.log("useRepositoryFolder", useRepositoryFolder);
-            console.log("repositoryName", repositoryName);
-            console.log(process.env.GITHUB_REPOSITORY, process.env.GITHUB_REPOSITORY);
             try {
                 // Inputs are re-evaluted before the post action, so we want to store the original values
                 core.saveState(state_1.State.PrimaryKey, key);
