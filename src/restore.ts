@@ -24,10 +24,21 @@ async function restoreCache() {
     const useFallback = getInputAsBoolean("use-fallback");
     const useRepositoryFolder = getInputAsBoolean("use-repository-folder");
     const paths = getInputAsArray("path");
-    const restoreKeys = getInputAsArray("restore-keys");
+    const restoreKeysInput = getInputAsArray("restore-keys");
 
-    const repositoryName = process.env.GITHUB_REPOSITORY?.replace(`${process.env.GITHUB_REPOSITORY || ""}/`, "")
-    const key = useRepositoryFolder && repositoryName ? `${repositoryName}/${keyInput}` : keyInput
+    let key = keyInput;
+    let restoreKeys = restoreKeysInput;
+
+    const repositoryName = process.env.GITHUB_REPOSITORY?.replace(
+      `${process.env.GITHUB_REPOSITORY || ""}/`,
+      ""
+    );
+    if (useRepositoryFolder && repositoryName) {
+      key = `${repositoryName}/${keyInput}`;
+      restoreKeys = restoreKeysInput.map(
+        (restoreKey) => `${repositoryName}/${restoreKey}`
+      );
+    }
 
     try {
       // Inputs are re-evaluted before the post action, so we want to store the original values
