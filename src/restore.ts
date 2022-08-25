@@ -24,11 +24,26 @@ process.on("uncaughtException", (e) => core.info("warning: " + e.message));
 async function restoreCache() {
   try {
     const bucket = core.getInput("bucket", { required: true });
-    const key = core.getInput("key", { required: true });
+    const keyInput = core.getInput("key", { required: true });
     const useFallback = getInputAsBoolean("use-fallback");
+    const useRepositoryPrefix = getInputAsBoolean("use-repository-prefix");
     const paths = getInputAsArray("path");
-    const restoreKeys = getInputAsArray("restore-keys");
+    const restoreKeysInput = getInputAsArray("restore-keys");
     const lookupOnly = getInputAsBoolean("lookup-only");
+
+    let key = keyInput;
+    let restoreKeys = restoreKeysInput;
+
+    const repositoryName = process.env.GITHUB_REPOSITORY?.replace(
+      `${process.env.GITHUB_REPOSITORY_OWNER || ""}/`,
+      "",
+    );
+    if (useRepositoryPrefix && repositoryName) {
+      key = `${repositoryName}-${keyInput}`;
+      restoreKeys = restoreKeysInput.map(
+        (restoreKey) => `${repositoryName}-${restoreKey}`,
+      );
+    }
 
     try {
       // Inputs are re-evaluted before the post action, so we want to store the original values
@@ -77,13 +92,15 @@ async function restoreCache() {
         } else {
           core.info(
             `Cache Miss or cache size is 0. NOT Downloading cache from s3 because lookup-only is set. bucket: ${bucket}, object: ${obj.name}`,
-          )
+          );
         }
       } else {
         core.info(
           `Downloading cache from s3 to ${archivePath}. bucket: ${bucket}, object: ${obj.name}`,
         );
-        await withRetry("fGetObject", () => mc.fGetObject(bucket, obj.name!, archivePath));
+        await withRetry("fGetObject", () =>
+          mc.fGetObject(bucket, obj.name!, archivePath),
+        );
 
         if (core.isDebug()) {
           await listTar(archivePath, compressionMethod);
