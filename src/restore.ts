@@ -20,10 +20,25 @@ process.on("uncaughtException", (e) => core.info("warning: " + e.message));
 async function restoreCache() {
   try {
     const bucket = core.getInput("bucket", { required: true });
-    const key = core.getInput("key", { required: true });
+    const keyInput = core.getInput("key", { required: true });
     const useFallback = getInputAsBoolean("use-fallback");
+    const useRepositoryPrefix = getInputAsBoolean("use-repository-prefix");
     const paths = getInputAsArray("path");
-    const restoreKeys = getInputAsArray("restore-keys");
+    const restoreKeysInput = getInputAsArray("restore-keys");
+
+    let key = keyInput;
+    let restoreKeys = restoreKeysInput;
+
+    const repositoryName = process.env.GITHUB_REPOSITORY?.replace(
+      `${process.env.GITHUB_REPOSITORY_OWNER || ""}/`,
+      ""
+    );
+    if (useRepositoryPrefix && repositoryName) {
+      key = `${repositoryName}-${keyInput}`;
+      restoreKeys = restoreKeysInput.map(
+        (restoreKey) => `${repositoryName}-${restoreKey}`
+      );
+    }
 
     try {
       // Inputs are re-evaluted before the post action, so we want to store the original values

@@ -82911,13 +82911,22 @@ const state_1 = __webpack_require__(179);
 const utils_1 = __webpack_require__(163);
 process.on("uncaughtException", (e) => core.info("warning: " + e.message));
 function restoreCache() {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const bucket = core.getInput("bucket", { required: true });
-            const key = core.getInput("key", { required: true });
+            const keyInput = core.getInput("key", { required: true });
             const useFallback = utils_1.getInputAsBoolean("use-fallback");
+            const useRepositoryPrefix = utils_1.getInputAsBoolean("use-repository-prefix");
             const paths = utils_1.getInputAsArray("path");
-            const restoreKeys = utils_1.getInputAsArray("restore-keys");
+            const restoreKeysInput = utils_1.getInputAsArray("restore-keys");
+            let key = keyInput;
+            let restoreKeys = restoreKeysInput;
+            const repositoryName = (_a = process.env.GITHUB_REPOSITORY) === null || _a === void 0 ? void 0 : _a.replace(`${process.env.GITHUB_REPOSITORY_OWNER || ""}/`, "");
+            if (useRepositoryPrefix && repositoryName) {
+                key = `${repositoryName}-${keyInput}`;
+                restoreKeys = restoreKeysInput.map((restoreKey) => `${repositoryName}-${restoreKey}`);
+            }
             try {
                 // Inputs are re-evaluted before the post action, so we want to store the original values
                 core.saveState(state_1.State.PrimaryKey, key);
