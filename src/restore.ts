@@ -112,7 +112,7 @@ async function restoreCache() {
         core.info("Cache restored from s3 successfully");
       }
     } catch (e) {
-      core.info("Restore s3 cache failed: " + e.message);
+      core.info("Restore s3 cache failed: " + (e as Error).message);
       setCacheHitOutput(false);
       setCacheMatchedKeyOutput("");
       if (useFallback) {
@@ -136,7 +136,7 @@ async function restoreCache() {
       }
     }
   } catch (e) {
-    core.setFailed(e.message);
+    core.setFailed((e as Error).message);
   }
 }
 
