@@ -222,6 +222,12 @@ export async function saveCache(standalone: boolean) {
       return;
     }
 
+    const readOnly = getInputAsBoolean("read-only");
+    if (readOnly) {
+      core.info("Cache is read-only, not saving");
+      return;
+    }
+
     const bucket = core.getInput("bucket", { required: true });
     // Inputs are re-evaluted before the post action, so we want the original key
     const key = standalone
