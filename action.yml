@@ -44,6 +44,10 @@ inputs:
     description: "Prefix the key and restore keys with repository name"
     required: false
     default: "false"
+  read-only:
+    description: "Read only mode, do not save cache"
+    required: false
+    default: "false"
   # zip-option:
   #   description: zip options
   #   required: false
