@@ -29,6 +29,7 @@ jobs:
           sessionToken: "AQoDYXdzEJraDcqRtz123" # optional
           bucket: actions-cache # required
           use-fallback: true # optional, use github actions cache fallback, default true
+          force-save: true # optional, force save cache even the key was an exact match, will not save if the cache is read only, default false
 
           # actions/cache compatible properties: https://github.com/actions/cache
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
