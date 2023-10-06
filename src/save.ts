@@ -16,7 +16,9 @@ process.on("uncaughtException", (e) => core.info("warning: " + e.message));
 
 async function saveCache() {
   try {
-    if (isExactKeyMatch()) {
+    const forceSave = getInputAsBoolean("force-save");
+
+    if (!forceSave && isExactKeyMatch()) {
       core.info("Cache was exact key match, not saving");
       return;
     }
@@ -25,6 +27,10 @@ async function saveCache() {
     if (readOnly) {
       core.info("Cache is read-only, not saving");
       return;
+    }
+
+    if (forceSave) {
+      core.info("Force save is enabled");
     }
 
     const bucket = core.getInput("bucket", { required: true });

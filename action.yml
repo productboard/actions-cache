@@ -48,6 +48,10 @@ inputs:
     description: "Read only mode, do not save cache"
     required: false
     default: "false"
+  force-save:
+    description: "Save cache even if key is matched"
+    required: false
+    default: "false"
   # zip-option:
   #   description: zip options
   #   required: false
