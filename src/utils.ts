@@ -217,7 +217,9 @@ export function isExactKeyMatch(): boolean {
 
 export async function saveCache(standalone: boolean) {
   try {
-    if (!standalone && isExactKeyMatch()) {
+    const forceSave = getInputAsBoolean("force-save");
+
+    if (!forceSave && !standalone && isExactKeyMatch()) {
       core.info("Cache was exact key match, not saving");
       return;
     }
@@ -226,6 +228,10 @@ export async function saveCache(standalone: boolean) {
     if (readOnly) {
       core.info("Cache is read-only, not saving");
       return;
+    }
+
+    if (forceSave) {
+      core.info("Force save is enabled");
     }
 
     const bucket = core.getInput("bucket", { required: true });
