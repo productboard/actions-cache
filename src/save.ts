@@ -29,6 +29,10 @@ async function saveCache() {
       return;
     }
 
+    if (forceSave) {
+      core.info("Force save is enabled");
+    }
+
     const bucket = core.getInput("bucket", { required: true });
     // Inputs are re-evaluted before the post action, so we want the original key
     const key = core.getState(State.PrimaryKey);
