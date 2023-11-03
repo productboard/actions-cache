@@ -30,6 +30,7 @@ async function restoreCache() {
     const paths = getInputAsArray("path");
     const restoreKeysInput = getInputAsArray("restore-keys");
     const lookupOnly = getInputAsBoolean("lookup-only");
+    const useExactKeyMatchInput = getInputAsBoolean("use-exact-key-match");
 
     let key = keyInput;
     let restoreKeys = restoreKeysInput;
@@ -43,6 +44,11 @@ async function restoreCache() {
       restoreKeys = restoreKeysInput.map(
         (restoreKey) => `${repositoryName}-${restoreKey}`,
       );
+    }
+
+    if (useExactKeyMatchInput) {
+      core.info("Restoring cache with exact key match");
+      restoreKeys = [];
     }
 
     try {

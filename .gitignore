@@ -96,3 +96,5 @@ typings/
 .vscode/
 .idea/
 src/test.ts
+.idea
+*.iml
