@@ -25,6 +25,7 @@ async function restoreCache() {
     const useRepositoryPrefix = getInputAsBoolean("use-repository-prefix");
     const paths = getInputAsArray("path");
     const restoreKeysInput = getInputAsArray("restore-keys");
+    const useExactKeyMatchInput = getInputAsBoolean("use-exact-key-match");
 
     let key = keyInput;
     let restoreKeys = restoreKeysInput;
@@ -38,6 +39,11 @@ async function restoreCache() {
       restoreKeys = restoreKeysInput.map(
         (restoreKey) => `${repositoryName}-${restoreKey}`
       );
+    }
+
+    if (useExactKeyMatchInput) {
+      core.info("Restoring cache with exact key match");
+      restoreKeys = [];
     }
 
     try {

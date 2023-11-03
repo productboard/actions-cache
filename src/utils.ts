@@ -92,7 +92,7 @@ export async function findObject(
   core.debug("Key: " + JSON.stringify(key));
   core.debug("Restore keys: " + JSON.stringify(restoreKeys));
 
-  core.debug(`Finding exact macth for: ${key}`);
+  core.debug(`Finding exact match for: ${key}`);
   const exactMatch = await listObjects(mc, bucket, key);
   core.debug(`Found ${JSON.stringify(exactMatch, null, 2)}`);
   if (exactMatch.length) {
