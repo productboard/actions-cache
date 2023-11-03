@@ -36,6 +36,10 @@ inputs:
   restore-keys:
     description: "An ordered list of keys to use for restoring the cache if no cache hit occurred for key"
     required: false
+  disable-restore-keys:
+    description: "Do not restore cache with the 'restore-keys' option when no cache hit occurred for 'key'"
+    required: false
+    default: "false"
   use-fallback:
     description: "Use github actions/cache as fallback"
     required: false
