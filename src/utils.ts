@@ -6,7 +6,7 @@ import { State } from "./state";
 
 export function isGhes(): boolean {
   const ghUrl = new URL(
-    process.env["GITHUB_SERVER_URL"] || "https://github.com"
+    process.env["GITHUB_SERVER_URL"] || "https://github.com",
   );
   return ghUrl.hostname.toUpperCase() !== "GITHUB.COM";
 }
@@ -33,14 +33,14 @@ export function newMinio({
 
 export function getInputAsBoolean(
   name: string,
-  options?: core.InputOptions
+  options?: core.InputOptions,
 ): boolean {
   return core.getInput(name, options) === "true";
 }
 
 export function getInputAsArray(
   name: string,
-  options?: core.InputOptions
+  options?: core.InputOptions,
 ): string[] {
   return core
     .getInput(name, options)
@@ -51,7 +51,7 @@ export function getInputAsArray(
 
 export function getInputAsInt(
   name: string,
-  options?: core.InputOptions
+  options?: core.InputOptions,
 ): number | undefined {
   const value = parseInt(core.getInput(name, options));
   if (isNaN(value) || value < 0) {
@@ -87,7 +87,7 @@ export async function findObject(
   bucket: string,
   key: string,
   restoreKeys: string[],
-  compressionMethod: CompressionMethod
+  compressionMethod: CompressionMethod,
 ): Promise<FindObjectResult> {
   core.debug("Key: " + JSON.stringify(key));
   core.debug("Restore keys: " + JSON.stringify(restoreKeys));
@@ -105,13 +105,14 @@ export async function findObject(
     const fn = utils.getCacheFileName(compressionMethod);
     core.debug(`Finding object with prefix: ${restoreKey}`);
     let objects = await listObjects(mc, bucket, restoreKey);
-    objects = objects.filter((o) => o.name.includes(fn));
+    objects = objects.filter((o) => Boolean(o.name?.includes(fn)));
     core.debug(`Found ${JSON.stringify(objects, null, 2)}`);
     if (objects.length < 1) {
       continue;
     }
     const sorted = objects.sort(
-      (a, b) => b.lastModified.getTime() - a.lastModified.getTime()
+      (a, b) =>
+        b.lastModified?.getTime() ?? 0 - (a.lastModified?.getTime() ?? 0),
     );
     const result = { item: sorted[0], matchingKey: restoreKey };
     core.debug(`Using latest ${JSON.stringify(result)}`);
@@ -123,7 +124,7 @@ export async function findObject(
 export function listObjects(
   mc: minio.Client,
   bucket: string,
-  prefix: string
+  prefix: string,
 ): Promise<minio.BucketItem[]> {
   return new Promise((resolve, reject) => {
     const h = mc.listObjectsV2(bucket, prefix, true);
@@ -160,7 +161,7 @@ export function isExactKeyMatch(): boolean {
   const inputKey = core.getState(State.PrimaryKey);
   const result = getMatchedKey() === inputKey;
   core.debug(
-    `isExactKeyMatch: matchedKey=${matchedKey} inputKey=${inputKey}, result=${result}`
+    `isExactKeyMatch: matchedKey=${matchedKey} inputKey=${inputKey}, result=${result}`,
   );
   return result;
 }
