@@ -74,7 +74,13 @@ async function restoreCache() {
       core.info(
         `Downloading cache from s3 to ${archivePath}. bucket: ${bucket}, object: ${obj.name}`
       );
-      await mc.fGetObject(bucket, obj.name, archivePath);
+
+      if (!obj.name) {
+        core.error("Cache not found");
+        return;
+      }
+
+      mc.fGetObject(bucket, obj.name, archivePath);
 
       if (core.isDebug()) {
         await listTar(archivePath, compressionMethod);
