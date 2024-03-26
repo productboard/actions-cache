@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
-    "lib": ["ES2022"],
+    "target": "ES6",
     "module": "node16",
-    "target": "ES2022",
     "outDir": "./lib" /* Redirect output structure to the directory. */,
     "rootDir": "./src" /* Specify the root directory of input files. Use to control the output directory structure with --outDir. */,
     "strict": true /* Enable all strict type-checking options. */,
