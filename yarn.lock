@@ -2,20 +2,20 @@
 # yarn lockfile v1
 
 
-"@actions/cache@3.0.6":
-  version "3.0.6"
-  resolved "https://registry.yarnpkg.com/@actions/cache/-/cache-3.0.6.tgz#b76c51a78c927fcf0eb631b96a07e34f575c422b"
-  integrity sha512-Tttit+nqmxgb2M5Ufj5p8Lwd+fx329HOTLzxMrY4aaaZqBzqetgWlEfszMyiXfX4cJML+bzLJbyD9rNYt8TJ8g==
+"@actions/cache@3.2.4":
+  version "3.2.4"
+  resolved "https://registry.yarnpkg.com/@actions/cache/-/cache-3.2.4.tgz#793aade7375ba436295ff5ae6139be9d06dfab30"
+  integrity sha512-RuHnwfcDagtX+37s0ZWy7clbOfnZ7AlDJQ7k/9rzt2W4Gnwde3fa/qjSjVuz4vLcLIpc7fUob27CMrqiWZytYA==
   dependencies:
     "@actions/core" "^1.10.0"
     "@actions/exec" "^1.0.1"
     "@actions/glob" "^0.1.0"
-    "@actions/http-client" "^2.0.1"
+    "@actions/http-client" "^2.1.1"
     "@actions/io" "^1.0.1"
     "@azure/abort-controller" "^1.1.0"
     "@azure/ms-rest-js" "^2.6.0"
-    "@azure/storage-blob" "^12.8.0"
-    semver "^6.1.0"
+    "@azure/storage-blob" "^12.13.0"
+    semver "^6.3.1"
     uuid "^3.3.3"
 
 "@actions/core@1.10.1":
@@ -63,6 +63,14 @@
   integrity sha512-PIXiMVtz6VvyaRsGY268qvj57hXQEpsYogYOu2nrQhlf+XCGmZstmuZBbAybUl1nQGnvS1k1eEsQ69ZoD7xlSw==
   dependencies:
     tunnel "^0.0.6"
+
+"@actions/http-client@^2.1.1":
+  version "2.2.1"
+  resolved "https://registry.yarnpkg.com/@actions/http-client/-/http-client-2.2.1.tgz#ed3fe7a5a6d317ac1d39886b0bb999ded229bb38"
+  integrity sha512-KhC/cZsq7f8I4LfZSJKgCvEwfkE8o1538VoBeoGzokVLLnbFDEAdFD3UhoMklxo2un9NJVBdANOresx7vTHlHw==
+  dependencies:
+    tunnel "^0.0.6"
+    undici "^5.25.4"
 
 "@actions/io@^1.0.1":
   version "1.1.0"
@@ -178,7 +186,7 @@
     uuid "^8.3.2"
     xml2js "^0.4.19"
 
-"@azure/storage-blob@^12.8.0":
+"@azure/storage-blob@^12.13.0":
   version "12.17.0"
   resolved "https://registry.yarnpkg.com/@azure/storage-blob/-/storage-blob-12.17.0.tgz#04aad7f59cb08dbbe5b1b672a9f5b6256c8c9006"
   integrity sha512-sM4vpsCpcCApagRW5UIjQNlNylo02my2opgp0Emi8x888hZUvJ3dN69Oq20cEGXkMUWnoCrBaB0zyS3yeB87sQ==
@@ -572,6 +580,11 @@
   version "0.2.3"
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
+
+"@fastify/busboy@^2.0.0":
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/@fastify/busboy/-/busboy-2.1.1.tgz#b9da6a878a371829a0502c9b6c1c143ef6663f4d"
+  integrity sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==
 
 "@istanbuljs/load-nyc-config@^1.0.0":
   version "1.1.0"
@@ -2536,7 +2549,7 @@ semver@^6.0.0, semver@^6.3.0:
   resolved "https://registry.npmjs.org/semver/-/semver-6.3.0.tgz"
   integrity sha512-b39TBaTSfV6yBrapU89p5fKekE2m/NwnDocOVruQFS1/veMgdzuPcnOM34M6CwxW8jH/lxEa5rBoDeUwu5HHTw==
 
-semver@^6.1.0:
+semver@^6.3.1:
   version "6.3.1"
   resolved "https://registry.yarnpkg.com/semver/-/semver-6.3.1.tgz#556d2ef8689146e46dcea4bfdd095f3434dffcb4"
   integrity sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==
@@ -2803,6 +2816,13 @@ typescript@4.9.3:
   version "4.9.3"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.9.3.tgz#3aea307c1746b8c384435d8ac36b8a2e580d85db"
   integrity sha512-CIfGzTelbKNEnLpLdGFgdyKhG23CKdKgQPOBc+OUNrkJ2vr+KSzsSV5kq5iWhEQbok+quxgGzrAtGWCyU7tHnA==
+
+undici@^5.25.4:
+  version "5.28.3"
+  resolved "https://registry.yarnpkg.com/undici/-/undici-5.28.3.tgz#a731e0eff2c3fcfd41c1169a869062be222d1e5b"
+  integrity sha512-3ItfzbrhDlINjaP0duwnNsKpDQk3acHI3gVJ1z4fmwMK31k5G9OVIAMLSIaP6w4FaGkaAkN6zaQO9LUvZ1t7VA==
+  dependencies:
+    "@fastify/busboy" "^2.0.0"
 
 update-browserslist-db@^1.0.9:
   version "1.0.10"
