@@ -12,7 +12,9 @@ import {
   isGhes,
   newMinio,
   setCacheHitOutput,
+  setCacheSizeOutput,
   saveMatchedKey,
+  getInput,
 } from "./utils";
 
 process.on("uncaughtException", (e) => core.info("warning: " + e.message));
@@ -34,6 +36,7 @@ async function restoreCache() {
       `${process.env.GITHUB_REPOSITORY_OWNER || ""}/`,
       ""
     );
+
     if (useRepositoryPrefix && repositoryName) {
       key = `${repositoryName}-${keyInput}`;
       restoreKeys = restoreKeysInput.map(
@@ -49,9 +52,10 @@ async function restoreCache() {
     try {
       // Inputs are re-evaluted before the post action, so we want to store the original values
       core.saveState(State.PrimaryKey, key);
-      core.saveState(State.AccessKey, core.getInput("accessKey"));
-      core.saveState(State.SecretKey, core.getInput("secretKey"));
-      core.saveState(State.SessionToken, core.getInput("sessionToken"));
+      core.saveState(State.AccessKey, getInput("accessKey", "AWS_ACCESS_KEY_ID"));
+      core.saveState(State.SecretKey, getInput("secretKey", "AWS_SECRET_ACCESS_KEY"));
+      core.saveState(State.SessionToken, getInput("sessionToken", "AWS_SESSION_TOKEN"));
+      core.saveState(State.Region, getInput("region", "AWS_REGION"));
 
       const mc = newMinio();
 
@@ -84,6 +88,7 @@ async function restoreCache() {
 
       await extractTar(archivePath, compressionMethod);
       setCacheHitOutput(matchingKey === key);
+      setCacheSizeOutput(obj.size)
       core.info("Cache restored from s3 successfully");
     } catch (e) {
       core.info("Restore s3 cache failed: " + (e as Error).message);
