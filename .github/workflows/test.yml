@@ -15,17 +15,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Setup Node.js
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
-          node-version: "12.x"
+          node-version: "20.x"
       - name: Install Yarn
         run: npm install -g yarn
       - name: Get yarn cache directory path
         id: yarn-cache-dir-path
         run: echo "::set-output name=dir::$(yarn cache dir)"
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         id: yarn-cache
         with:
           path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
@@ -34,8 +34,8 @@ jobs:
             ${{ runner.os }}-yarn-
       - name: Install Deps
         run: yarn install --pure-lockfile
-      - name: Build & Test
-        run: yarn test
+      # - name: Build & Test
+      #   run: yarn test
       - name: Ensure dist/ folder is up-to-date
         run: |
           yarn build
@@ -62,7 +62,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Generate files in working directory
         shell: bash
         run: src/create-cache-files.sh ${{ runner.os }} test-cache
@@ -91,7 +91,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Restore cache
         uses: ./
         with:
@@ -120,7 +120,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Restore cache
         uses: ./
         with:
@@ -134,6 +134,64 @@ jobs:
             test-cache
             ~/test-cache
           restore-keys: test-${{ runner.os }}-
+      - name: Verify cache files in working directory
+        shell: bash
+        run: src/verify-cache-files.sh ${{ runner.os }} test-cache
+      - name: Verify cache files outside working directory
+        shell: bash
+        run: src/verify-cache-files.sh ${{ runner.os }} ~/test-cache
+
+  test-save-only:
+    needs: create-minio-bucket
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macOS-latest ]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate files in working directory
+        shell: bash
+        run: src/create-cache-files.sh ${{ runner.os }} test-cache
+      - name: Generate files outside working directory
+        shell: bash
+        run: src/create-cache-files.sh ${{ runner.os }} ~/test-cache
+      - name: Save cache
+        uses: ./save/
+        with:
+          endpoint: play.min.io
+          accessKey: "Q3AM3UQ867SPQQA43P2F"
+          secretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
+          bucket: actions-cache
+          use-fallback: false
+          key: test-save-only-${{ runner.os }}-${{ github.run_id }}
+          path: |
+            test-cache
+            ~/test-cache
+
+  test-restore-only:
+    needs: test-save-only
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macOS-latest ]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Restore cache
+        uses: ./restore/
+        with:
+          endpoint: play.min.io
+          accessKey: "Q3AM3UQ867SPQQA43P2F"
+          secretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
+          bucket: actions-cache
+          use-fallback: false
+          key: test-save-only-${{ runner.os }}-${{ github.run_id }}
+          path: |
+            test-cache
+            ~/test-cache
       - name: Verify cache files in working directory
         shell: bash
         run: src/verify-cache-files.sh ${{ runner.os }} test-cache

@@ -3,6 +3,9 @@ import * as utils from "@actions/cache/lib/internal/cacheUtils";
 import * as core from "@actions/core";
 import * as minio from "minio";
 import { State } from "./state";
+import path from "path";
+import {createTar, listTar} from "@actions/cache/lib/internal/tar";
+import * as cache from "@actions/cache";
 
 export function isGhes(): boolean {
   const ghUrl = new URL(
@@ -11,23 +14,36 @@ export function isGhes(): boolean {
   return ghUrl.hostname.toUpperCase() !== "GITHUB.COM";
 }
 
+export function getInput(key: string, envKey?: string) {
+  let result;
+  if (envKey) {
+    result = process.env[envKey]
+  }
+  if (result === undefined) {
+    result = core.getInput(key);
+  }
+  return result;
+}
+
 export function newMinio({
   accessKey,
   secretKey,
   sessionToken,
+  region,
 }: {
   accessKey?: string;
   secretKey?: string;
   sessionToken?: string;
+  region?: string;
 } = {}) {
   return new minio.Client({
     endPoint: core.getInput("endpoint"),
     port: getInputAsInt("port"),
     useSSL: !getInputAsBoolean("insecure"),
-    accessKey: accessKey ?? core.getInput("accessKey"),
-    secretKey: secretKey ?? core.getInput("secretKey"),
-    sessionToken: sessionToken ?? core.getInput("sessionToken"),
-    region: core.getInput("region"),
+    accessKey: accessKey ?? getInput("accessKey", "AWS_ACCESS_KEY_ID"),
+    secretKey: secretKey ?? getInput("secretKey", "AWS_SECRET_ACCESS_KEY"),
+    sessionToken: sessionToken ?? getInput("sessionToken", "AWS_SESSION_TOKEN"),
+    region: region ?? getInput("region", "AWS_REGION"),
   });
 }
 
@@ -75,6 +91,10 @@ export function formatSize(value?: number, format = "bi") {
 
 export function setCacheHitOutput(isCacheHit: boolean): void {
   core.setOutput("cache-hit", isCacheHit.toString());
+}
+
+export function setCacheSizeOutput(cacheSize: number): void {
+  core.setOutput("cache-size", cacheSize.toString())
 }
 
 type FindObjectResult = {
@@ -129,21 +149,24 @@ export function listObjects(
     const h = mc.listObjectsV2(bucket, prefix, true);
     const r: minio.BucketItem[] = [];
     let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved)
+        reject(new Error("list objects no result after 10 seconds"));
+    }, 10000);
+
     h.on("data", (obj) => {
       r.push(obj);
     });
     h.on("error", (e) => {
       resolved = true;
       reject(e);
+      clearTimeout(timeout)
     });
     h.on("end", () => {
       resolved = true;
       resolve(r);
+      clearTimeout(timeout)
     });
-    setTimeout(() => {
-      if (!resolved)
-        reject(new Error("list objects no result after 10 seconds"));
-    }, 10000);
   });
 }
 
@@ -163,4 +186,79 @@ export function isExactKeyMatch(): boolean {
     `isExactKeyMatch: matchedKey=${matchedKey} inputKey=${inputKey}, result=${result}`
   );
   return result;
+}
+
+export async function saveCache(standalone: boolean) {
+  try {
+    const forceSave = getInputAsBoolean("force-save");
+
+    if (forceSave) {
+      core.info("Force save is enabled");
+    }
+
+    if (isExactKeyMatch() && !(forceSave || standalone)) {
+      core.info("Cache was exact key match, not saving");
+      return;
+    }
+
+    const readOnly = getInputAsBoolean("read-only");
+
+    if (readOnly) {
+      core.info("Cache is read-only, not saving");
+      return;
+    }
+
+    const bucket = core.getInput("bucket", { required: true });
+    // Inputs are re-evaluted before the post action, so we want the original key
+    const key = standalone ? core.getInput("key", { required: true }) : core.getState(State.PrimaryKey);
+    const useFallback = getInputAsBoolean("use-fallback");
+    const paths = getInputAsArray("path");
+
+    try {
+      const mc = newMinio({
+        // Inputs are re-evaluted before the post action, so we want the original keys & tokens
+        accessKey: standalone ? getInput("accessKey", "AWS_ACCESS_KEY_ID") : core.getState(State.AccessKey),
+        secretKey: standalone ? getInput("secretKey", "AWS_SECRET_ACCESS_KEY") : core.getState(State.SecretKey),
+        sessionToken: standalone ? getInput("sessionToken", "AWS_SESSION_TOKEN") : core.getState(State.SessionToken),
+        region: standalone ? getInput("region", "AWS_REGION") : core.getState(State.Region),
+      });
+
+      const compressionMethod = await utils.getCompressionMethod();
+      const cachePaths = await utils.resolvePaths(paths);
+      core.debug("Cache Paths:");
+      core.debug(`${JSON.stringify(cachePaths)}`);
+
+      const archiveFolder = await utils.createTempDirectory();
+      const cacheFileName = utils.getCacheFileName(compressionMethod);
+      const archivePath = path.join(archiveFolder, cacheFileName);
+
+      core.debug(`Archive Path: ${archivePath}`);
+
+      await createTar(archiveFolder, cachePaths, compressionMethod);
+      if (core.isDebug()) {
+        await listTar(archivePath, compressionMethod);
+      }
+
+      const object = path.join(key, cacheFileName);
+
+      core.info(`Uploading tar to s3. Bucket: ${bucket}, Object: ${object}`);
+      await mc.fPutObject(bucket, object, archivePath, {});
+      core.info("Cache saved to s3 successfully");
+    } catch (e) {
+      core.info("Save s3 cache failed: " + (e as Error).message);
+      if (useFallback) {
+        if (isGhes()) {
+          core.warning("Cache fallback is not supported on Github Enterpise.");
+        } else {
+          core.info("Saving cache using fallback");
+          await cache.saveCache(paths, key);
+          core.info("Save cache using fallback successfully");
+        }
+      } else {
+        core.debug("skipped fallback cache");
+      }
+    }
+  } catch (e) {
+    core.info("warning: " + (e as Error).message);
+  }
 }
