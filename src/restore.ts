@@ -15,6 +15,8 @@ import {
   setCacheSizeOutput,
   saveMatchedKey,
   getInput,
+  execTarExtract,
+  execAwsCli
 } from "./utils";
 
 process.on("uncaughtException", (e) => core.info("warning: " + e.message));
@@ -28,6 +30,8 @@ async function restoreCache() {
     const paths = getInputAsArray("path");
     const restoreKeysInput = getInputAsArray("restore-keys");
     const useExactKeyMatchInput = getInputAsBoolean("use-exact-key-match");
+    const useAwsCli = getInputAsBoolean("use-aws-cli");
+    const useTarStreaming = getInputAsBoolean("use-tar-streaming");
 
     let key = keyInput;
     let restoreKeys = restoreKeysInput;
@@ -78,15 +82,37 @@ async function restoreCache() {
       core.info(
         `Downloading cache from s3 to ${archivePath}. bucket: ${bucket}, object: ${obj.name}`
       );
-      await mc.fGetObject(bucket, obj.name, archivePath);
 
-      if (core.isDebug()) {
-        await listTar(archivePath, compressionMethod);
+      if (useTarStreaming) {
+        const tarProc = execTarExtract();
+
+        if (useAwsCli) {
+          const awsProc = execAwsCli(
+            ["s3", "cp", `s3://${bucket}/${obj.name}`, "-"]
+          );
+          awsProc.stdout.pipe(tarProc.stdin);
+        } else {
+          const tarballStream = await mc.getObject(bucket, obj.name)
+          tarballStream.pipe(tarProc.stdin);
+        }
+
+        core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
+        // await the tar subprocess
+        await new Promise((resolve, reject) => {
+          tarProc.on('close', resolve);
+          tarProc.on('error', reject);
+        });
+      } else {
+        await mc.fGetObject(bucket, obj.name, archivePath);
+
+        if (core.isDebug()) {
+          await listTar(archivePath, compressionMethod);
+        }
+
+        core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
+        await extractTar(archivePath, compressionMethod);
       }
 
-      core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
-
-      await extractTar(archivePath, compressionMethod);
       setCacheHitOutput(matchingKey === key);
       setCacheSizeOutput(obj.size)
       core.info("Cache restored from s3 successfully");
