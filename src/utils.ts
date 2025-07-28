@@ -7,6 +7,8 @@ import path from "path";
 import { createTar, listTar } from "@actions/cache/lib/internal/tar";
 import * as cache from "@actions/cache";
 import pRetry from "p-retry";
+import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import { writeFileSync } from "fs";
 
 export function isGhes(): boolean {
   const ghUrl = new URL(
@@ -236,9 +238,11 @@ export async function saveCache(standalone: boolean) {
       : core.getState(State.PrimaryKey);
     const useFallback = getInputAsBoolean("use-fallback");
     const paths = getInputAsArray("path");
+    const useAwsCli = getInputAsBoolean("use-aws-cli");
+    const useTarStreaming = getInputAsBoolean("use-tar-streaming");
 
     try {
-      const mc = newMinio({
+      const minioConfig = {
         // Inputs are re-evaluted before the post action, so we want the original keys & tokens
         accessKey: standalone
           ? getInput("accessKey", "AWS_ACCESS_KEY_ID")
@@ -252,30 +256,59 @@ export async function saveCache(standalone: boolean) {
         region: standalone
           ? getInput("region", "AWS_REGION")
           : core.getState(State.Region),
-      });
+      };
+      const mc = newMinio(minioConfig);
 
       const compressionMethod = await utils.getCompressionMethod();
       const cachePaths = await utils.resolvePaths(paths);
       core.debug("Cache Paths:");
       core.debug(`${JSON.stringify(cachePaths)}`);
 
-      const archiveFolder = await utils.createTempDirectory();
       const cacheFileName = utils.getCacheFileName(compressionMethod);
-      const archivePath = path.join(archiveFolder, cacheFileName);
 
-      core.debug(`Archive Path: ${archivePath}`);
-
-      await createTar(archiveFolder, cachePaths, compressionMethod);
-      if (core.isDebug()) {
-        await listTar(archivePath, compressionMethod);
-      }
+      const tarProc = await execTarCreate(cachePaths);
 
       const object = path.join(key, cacheFileName);
 
-      core.info(`Uploading tar to s3. Bucket: ${bucket}, Object: ${object}`);
-      await withRetry("fPutObject", () =>
-        mc.fPutObject(bucket, object, archivePath, {}),
-      );
+      if (useTarStreaming) {
+        if (useAwsCli) {
+          core.info("Using AWS CLI to upload cache");
+          const awsProc = execAwsCli(
+            ["s3", "cp", "-", `s3://${bucket}/${object}`],
+            {
+              AWS_ACCESS_KEY_ID: minioConfig.accessKey,
+              AWS_SECRET_ACCESS_KEY: minioConfig.secretKey,
+              AWS_SESSION_TOKEN: minioConfig.sessionToken,
+              AWS_REGION: minioConfig.region,
+            },
+          );
+          tarProc.stdout.pipe(awsProc.stdin);
+        } else {
+          await mc.putObject(bucket, object, tarProc.stdout);
+        }
+        core.info(`Uploading tar to s3. Bucket: ${bucket}, Object: ${object}`);
+        // await the tar subprocess
+        await new Promise((resolve, reject) => {
+          tarProc.on("close", resolve);
+          tarProc.on("error", reject);
+        });
+      } else {
+        const archiveFolder = await utils.createTempDirectory();
+        const cacheFileName = utils.getCacheFileName(compressionMethod);
+        const archivePath = path.join(archiveFolder, cacheFileName);
+
+        core.debug(`Archive Path: ${archivePath}`);
+
+        await createTar(archiveFolder, cachePaths, compressionMethod);
+        if (core.isDebug()) {
+          await listTar(archivePath, compressionMethod);
+        }
+
+        core.info(`Uploading tar to s3. Bucket: ${bucket}, Object: ${object}`);
+        await withRetry("fPutObject", () =>
+          mc.fPutObject(bucket, object, archivePath, {}),
+        );
+      }
       core.info("Cache saved to s3 successfully");
     } catch (e) {
       if (useFallback) {
@@ -294,4 +327,77 @@ export async function saveCache(standalone: boolean) {
   } catch (e) {
     core.info("warning: " + (e as Error).message);
   }
+}
+
+export function getWorkingDirectory(): string {
+  return process.env["GITHUB_WORKSPACE"] || process.cwd();
+}
+
+// Executes tar that extracts a zstd-compressed tarball from stdin
+export function execTarExtract(): ChildProcessWithoutNullStreams {
+  const args = [
+    "-xf",
+    "-",
+    "-P",
+    "-C",
+    getWorkingDirectory(),
+    "--use-compress-program",
+    "unzstd",
+  ];
+  core.debug("Executing: tar " + args.join(" "));
+  const tarProc = spawn("tar", args);
+  tarProc.stdout.pipe(process.stdout);
+  tarProc.stderr.pipe(process.stderr);
+  return tarProc;
+}
+
+// Executes tar that outputs a zstd-compressed tarball to stdout
+// param: paths contains the archived paths
+export async function execTarCreate(
+  paths: string[],
+): Promise<ChildProcessWithoutNullStreams> {
+  // write cachePaths to manifest.txt (avoid path length issues)
+  const tempDir = await utils.createTempDirectory();
+  const manifestPath = path.join(tempDir, "manifest.txt");
+  writeFileSync(manifestPath, paths.join("\n"));
+  const args = [
+    "-cf",
+    "-",
+    "--posix",
+    "-P",
+    "-C",
+    getWorkingDirectory(),
+    "--use-compress-program",
+    "zstdmt",
+    "--files-from",
+    manifestPath,
+  ];
+  core.debug("Executing: tar " + args.join(" "));
+  const tarProc = spawn("tar", args);
+  tarProc.stderr.pipe(process.stderr);
+  return tarProc;
+}
+
+export function execAwsCli(
+  args: string[],
+  env: { [key: string]: string } = {},
+): ChildProcessWithoutNullStreams {
+  core.debug("Executing: aws " + args.join(" "));
+  const awsProc = spawn("aws", args, {
+    env: {
+      ...process.env,
+      AWS_ACCESS_KEY_ID:
+        env["AWS_ACCESS_KEY_ID"] || core.getState(State.AccessKey),
+      AWS_SECRET_ACCESS_KEY:
+        env["AWS_SECRET_ACCESS_KEY"] || core.getState(State.SecretKey),
+      AWS_SESSION_TOKEN:
+        env["AWS_SESSION_TOKEN"] || core.getState(State.SessionToken),
+      AWS_REGION:
+        env["AWS_REGION"] ||
+        core.getState(State.Region) ||
+        process.env.AWS_REGION,
+    },
+  });
+  awsProc.stderr.pipe(process.stderr);
+  return awsProc;
 }
