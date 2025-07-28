@@ -56,6 +56,14 @@ inputs:
     description: "Save cache even if key is matched"
     required: false
     default: "false"
+  use-aws-cli:
+    description: "Use AWS CLI instead of minio client for faster S3 transfers (requires installed AWS CLI, only supports Linux runners)"
+    required: false
+    default: "false"
+  use-tar-streaming:
+    description: "Do not create a local tar archive, use streaming (faster, only supports Linux runners)"
+    required: false
+    default: "false"
   # zip-option:
   #   description: zip options
   #   required: false
