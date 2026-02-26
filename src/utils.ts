@@ -283,15 +283,37 @@ export async function saveCache(standalone: boolean) {
             },
           );
           tarProc.stdout.pipe(awsProc.stdin);
+          core.info(
+            `Uploading tar to s3. Bucket: ${bucket}, Object: ${object}`,
+          );
+          // await both the tar and aws cli subprocesses
+          const [tarCode, awsCode] = await Promise.all([
+            new Promise<number | null>((resolve, reject) => {
+              tarProc.on("close", resolve);
+              tarProc.on("error", reject);
+            }),
+            new Promise<number | null>((resolve, reject) => {
+              awsProc.on("close", resolve);
+              awsProc.on("error", reject);
+            }),
+          ]);
+          if (tarCode !== 0) {
+            throw new Error(`tar process exited with code ${tarCode}`);
+          }
+          if (awsCode !== 0) {
+            throw new Error(`AWS CLI exited with code ${awsCode}`);
+          }
         } else {
           await mc.putObject(bucket, object, tarProc.stdout);
+          core.info(
+            `Uploading tar to s3. Bucket: ${bucket}, Object: ${object}`,
+          );
+          // await the tar subprocess
+          await new Promise((resolve, reject) => {
+            tarProc.on("close", resolve);
+            tarProc.on("error", reject);
+          });
         }
-        core.info(`Uploading tar to s3. Bucket: ${bucket}, Object: ${object}`);
-        // await the tar subprocess
-        await new Promise((resolve, reject) => {
-          tarProc.on("close", resolve);
-          tarProc.on("error", reject);
-        });
       } else {
         const archiveFolder = await utils.createTempDirectory();
         const cacheFileName = utils.getCacheFileName(compressionMethod);

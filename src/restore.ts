@@ -120,17 +120,38 @@ async function restoreCache() {
               "-",
             ]);
             awsProc.stdout.pipe(tarProc.stdin);
+            core.info(
+              `Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`,
+            );
+            // await both the tar and aws cli subprocesses
+            const [tarCode, awsCode] = await Promise.all([
+              new Promise<number | null>((resolve, reject) => {
+                tarProc.on("close", resolve);
+                tarProc.on("error", reject);
+              }),
+              new Promise<number | null>((resolve, reject) => {
+                awsProc.on("close", resolve);
+                awsProc.on("error", reject);
+              }),
+            ]);
+            if (tarCode !== 0) {
+              throw new Error(`tar process exited with code ${tarCode}`);
+            }
+            if (awsCode !== 0) {
+              throw new Error(`AWS CLI exited with code ${awsCode}`);
+            }
           } else {
             const tarballStream = await mc.getObject(bucket, obj.name);
             tarballStream.pipe(tarProc.stdin);
+            core.info(
+              `Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`,
+            );
+            // await the tar subprocess
+            await new Promise((resolve, reject) => {
+              tarProc.on("close", resolve);
+              tarProc.on("error", reject);
+            });
           }
-
-          core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
-          // await the tar subprocess
-          await new Promise((resolve, reject) => {
-            tarProc.on("close", resolve);
-            tarProc.on("error", reject);
-          });
         } else {
           await withRetry("fGetObject", () =>
             mc.fGetObject(bucket, obj.name!, archivePath),
