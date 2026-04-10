@@ -6,6 +6,7 @@ import { State } from "./state";
 import path from "path";
 import { createTar, listTar } from "@actions/cache/lib/internal/tar";
 import * as cache from "@actions/cache";
+import pRetry from 'p-retry';
 import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { writeFileSync } from "fs";
 
@@ -47,6 +48,21 @@ export function newMinio({
     sessionToken: sessionToken ?? getInput("sessionToken", "AWS_SESSION_TOKEN"),
     region: region ?? getInput("region", "AWS_REGION"),
   });
+}
+
+export function withRetry<A>(name: string, fn: () => Promise<A>): Promise<A> {
+  if (getInputAsBoolean("retry")) {
+    return pRetry(fn, {
+      retries: getInputAsInt("retry-count") ?? 3,
+      onFailedAttempt: (error) => {
+        core.info(
+          `Failed to ${name}. Attempt ${error.attemptNumber} failed. ${error.message}`
+        );
+      },
+    });
+  } else {
+    return fn();
+  }
 }
 
 export function getInputAsBoolean(
@@ -99,6 +115,10 @@ export function setCacheSizeOutput(cacheSize: number): void {
   core.setOutput("cache-size", cacheSize.toString())
 }
 
+export function setCacheMatchedKeyOutput(cacheMatchedKey: string): void {
+  core.setOutput("cache-matched-key", cacheMatchedKey)
+}
+
 type FindObjectResult = {
   item: minio.BucketItem;
   matchingKey: string;
@@ -115,25 +135,29 @@ export async function findObject(
   core.debug("Restore keys: " + JSON.stringify(restoreKeys));
 
   core.debug(`Finding exact match for: ${key}`);
-  const exactMatch = await listObjects(mc, bucket, key);
-  core.debug(`Found ${JSON.stringify(exactMatch, null, 2)}`);
-  if (exactMatch.length) {
-    const result = { item: exactMatch[0], matchingKey: key };
-    core.debug(`Using ${JSON.stringify(result)}`);
-    return result;
+  const keyMatches = await listObjects(mc, bucket, key);
+  core.debug(`Found ${JSON.stringify(keyMatches, null, 2)}`);
+  if (keyMatches.length > 0) {
+    const exactMatch = keyMatches.find((obj) => obj.name?.startsWith(key + path.sep));
+    if (exactMatch) {
+      const result = { item: exactMatch, matchingKey: key };
+      core.debug(`Found an exact match; using ${JSON.stringify(result)}`);
+      return result;
+    }
   }
+  core.debug(`Didn't find an exact match`);
 
   for (const restoreKey of restoreKeys) {
     const fn = utils.getCacheFileName(compressionMethod);
     core.debug(`Finding object with prefix: ${restoreKey}`);
     let objects = await listObjects(mc, bucket, restoreKey);
-    objects = objects.filter((o) => o.name.includes(fn));
+    objects = objects.filter((o) => o.name?.includes(fn));
     core.debug(`Found ${JSON.stringify(objects, null, 2)}`);
     if (objects.length < 1) {
       continue;
     }
     const sorted = objects.sort(
-      (a, b) => b.lastModified.getTime() - a.lastModified.getTime()
+      (a, b) => (b.lastModified?.getTime() ?? 0) - (a.lastModified?.getTime() ?? 0)
     );
     const result = { item: sorted[0], matchingKey: restoreKey };
     core.debug(`Using latest ${JSON.stringify(result)}`);
@@ -235,11 +259,11 @@ export async function saveCache(standalone: boolean) {
 
       const cacheFileName = utils.getCacheFileName(compressionMethod);
 
-      const tarProc = await execTarCreate(cachePaths);
-
       const object = path.join(key, cacheFileName);
 
       if (useTarStreaming) {
+        const tarProc = await execTarCreate(cachePaths);
+
         if (useAwsCli) {
           core.info("Using AWS CLI to upload cache");
           const awsProc = execAwsCli(
@@ -281,7 +305,6 @@ export async function saveCache(standalone: boolean) {
         }
       } else {
         const archiveFolder = await utils.createTempDirectory();
-        const cacheFileName = utils.getCacheFileName(compressionMethod);
         const archivePath = path.join(archiveFolder, cacheFileName);
 
         core.debug(`Archive Path: ${archivePath}`);
@@ -292,7 +315,7 @@ export async function saveCache(standalone: boolean) {
         }
 
         core.info(`Uploading tar to s3. Bucket: ${bucket}, Object: ${object}`);
-        await mc.fPutObject(bucket, object, archivePath, {});
+        await withRetry("fPutObject", () => mc.fPutObject(bucket, object, archivePath, {}));
       }
       core.info("Cache saved to s3 successfully");
     } catch (e) {

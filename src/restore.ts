@@ -12,9 +12,11 @@ import {
   isGhes,
   newMinio,
   setCacheHitOutput,
+  setCacheMatchedKeyOutput,
   setCacheSizeOutput,
   saveMatchedKey,
   getInput,
+  withRetry,
   execTarExtract,
   execAwsCli
 } from "./utils";
@@ -32,6 +34,7 @@ async function restoreCache() {
     const useExactKeyMatchInput = getInputAsBoolean("use-exact-key-match");
     const useAwsCli = getInputAsBoolean("use-aws-cli");
     const useTarStreaming = getInputAsBoolean("use-tar-streaming");
+    const lookupOnly = getInputAsBoolean("lookup-only");
 
     let key = keyInput;
     let restoreKeys = restoreKeysInput;
@@ -56,9 +59,18 @@ async function restoreCache() {
     try {
       // Inputs are re-evaluted before the post action, so we want to store the original values
       core.saveState(State.PrimaryKey, key);
-      core.saveState(State.AccessKey, getInput("accessKey", "AWS_ACCESS_KEY_ID"));
-      core.saveState(State.SecretKey, getInput("secretKey", "AWS_SECRET_ACCESS_KEY"));
-      core.saveState(State.SessionToken, getInput("sessionToken", "AWS_SESSION_TOKEN"));
+      core.saveState(
+        State.AccessKey,
+        getInput("accessKey", "AWS_ACCESS_KEY_ID"),
+      );
+      core.saveState(
+        State.SecretKey,
+        getInput("secretKey", "AWS_SECRET_ACCESS_KEY"),
+      );
+      core.saveState(
+        State.SessionToken,
+        getInput("sessionToken", "AWS_SESSION_TOKEN"),
+      );
       core.saveState(State.Region, getInput("region", "AWS_REGION"));
 
       const mc = newMinio();
@@ -67,7 +79,7 @@ async function restoreCache() {
       const cacheFileName = utils.getCacheFileName(compressionMethod);
       const archivePath = path.join(
         await utils.createTempDirectory(),
-        cacheFileName
+        cacheFileName,
       );
 
       const { item: obj, matchingKey } = await findObject(
@@ -75,67 +87,82 @@ async function restoreCache() {
         bucket,
         key,
         restoreKeys,
-        compressionMethod
+        compressionMethod,
       );
       core.debug("found cache object");
       saveMatchedKey(matchingKey);
-      core.info(
-        `Downloading cache from s3 to ${archivePath}. bucket: ${bucket}, object: ${obj.name}`
-      );
-
-      if (useTarStreaming) {
-        const tarProc = execTarExtract();
-
-        if (useAwsCli) {
-          const awsProc = execAwsCli(
-            ["s3", "cp", `s3://${bucket}/${obj.name}`, "-"]
+      const cacheHit = matchingKey === key;
+      setCacheHitOutput(cacheHit);
+      setCacheSizeOutput(obj.size);
+      setCacheMatchedKeyOutput(matchingKey);
+      if (lookupOnly) {
+        if (cacheHit && obj.size > 0) {
+          core.info(
+            `Cache Hit. NOT Downloading cache from s3 because lookup-only is set. bucket: ${bucket}, object: ${obj.name}`,
           );
-          awsProc.stdout.pipe(tarProc.stdin);
-          core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
-          // await both the tar and aws cli subprocesses
-          const [tarCode, awsCode] = await Promise.all([
-            new Promise<number | null>((resolve, reject) => {
-              tarProc.on("close", resolve);
-              tarProc.on("error", reject);
-            }),
-            new Promise<number | null>((resolve, reject) => {
-              awsProc.on("close", resolve);
-              awsProc.on("error", reject);
-            }),
-          ]);
-          if (tarCode !== 0) {
-            throw new Error(`tar process exited with code ${tarCode}`);
-          }
-          if (awsCode !== 0) {
-            throw new Error(`AWS CLI exited with code ${awsCode}`);
-          }
         } else {
-          const tarballStream = await mc.getObject(bucket, obj.name);
-          tarballStream.pipe(tarProc.stdin);
-          core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
-          // await the tar subprocess
-          await new Promise((resolve, reject) => {
-            tarProc.on("close", resolve);
-            tarProc.on("error", reject);
-          });
+          core.info(
+            `Cache Miss or cache size is 0. NOT Downloading cache from s3 because lookup-only is set. bucket: ${bucket}, object: ${obj.name}`,
+          )
         }
       } else {
-        await mc.fGetObject(bucket, obj.name, archivePath);
+        core.info(
+          `Downloading cache from s3 to ${archivePath}. bucket: ${bucket}, object: ${obj.name}`,
+        );
 
-        if (core.isDebug()) {
-          await listTar(archivePath, compressionMethod);
+        if (useTarStreaming) {
+          const tarProc = execTarExtract();
+
+          if (useAwsCli) {
+            const awsProc = execAwsCli(
+              ["s3", "cp", `s3://${bucket}/${obj.name}`, "-"]
+            );
+            awsProc.stdout.pipe(tarProc.stdin);
+            core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
+            // await both the tar and aws cli subprocesses
+            const [tarCode, awsCode] = await Promise.all([
+              new Promise<number | null>((resolve, reject) => {
+                tarProc.on("close", resolve);
+                tarProc.on("error", reject);
+              }),
+              new Promise<number | null>((resolve, reject) => {
+                awsProc.on("close", resolve);
+                awsProc.on("error", reject);
+              }),
+            ]);
+            if (tarCode !== 0) {
+              throw new Error(`tar process exited with code ${tarCode}`);
+            }
+            if (awsCode !== 0) {
+              throw new Error(`AWS CLI exited with code ${awsCode}`);
+            }
+          } else {
+            const tarballStream = await mc.getObject(bucket, obj.name!);
+            tarballStream.pipe(tarProc.stdin);
+            core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
+            // await the tar subprocess
+            await new Promise((resolve, reject) => {
+              tarProc.on("close", resolve);
+              tarProc.on("error", reject);
+            });
+          }
+        } else {
+          await withRetry("fGetObject", () => mc.fGetObject(bucket, obj.name!, archivePath));
+
+          if (core.isDebug()) {
+            await listTar(archivePath, compressionMethod);
+          }
+
+          core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
+
+          await extractTar(archivePath, compressionMethod);
         }
-
-        core.info(`Cache Size: ${formatSize(obj.size)} (${obj.size} bytes)`);
-        await extractTar(archivePath, compressionMethod);
+        core.info("Cache restored from s3 successfully");
       }
-
-      setCacheHitOutput(matchingKey === key);
-      setCacheSizeOutput(obj.size)
-      core.info("Cache restored from s3 successfully");
     } catch (e) {
       core.info("Restore s3 cache failed: " + (e as Error).message);
       setCacheHitOutput(false);
+      setCacheMatchedKeyOutput("");
       if (useFallback) {
         if (isGhes()) {
           core.warning("Cache fallback is not supported on Github Enterpise.");
@@ -144,10 +171,11 @@ async function restoreCache() {
           const fallbackMatchingKey = await cache.restoreCache(
             paths,
             key,
-            restoreKeys
+            restoreKeys,
           );
           if (fallbackMatchingKey) {
             setCacheHitOutput(fallbackMatchingKey === key);
+            setCacheMatchedKeyOutput(fallbackMatchingKey);
             core.info("Fallback cache restored successfully");
           } else {
             core.info("Fallback cache restore failed");

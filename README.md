@@ -1,8 +1,8 @@
-# productboard/actions-cache
-
-This is for of [tespkg/actions-cache](https://github.com/tespkg/actions-cache) with additional options and logic.
+# actions-s3-cache
 
 This action enables caching dependencies to s3 compatible storage, e.g. minio, AWS S3
+
+It also has github [actions/cache@v5](https://github.com/actions/cache) fallback if s3 save & restore fails
 
 ## Usage
 
@@ -20,7 +20,7 @@ jobs:
     runs-on: [ubuntu-latest]
 
     steps:
-      - uses: productboard/actions-cache@v1
+      - uses: tespkg/actions-cache@v1
         with:
           endpoint: play.min.io # optional, default s3.amazonaws.com
           insecure: false # optional, use http instead of https. default false
@@ -29,14 +29,7 @@ jobs:
           sessionToken: "AQoDYXdzEJraDcqRtz123" # optional
           bucket: actions-cache # required
           use-fallback: true # optional, use github actions cache fallback, default true
-          #############################################
-          # Productboard related customizations below #
-          #############################################
-          force-save: true # optional, force save cache even the key was an exact match, will not save if the cache is read only, default false
-          use-exact-key-match: # optional, do not restore cache with the 'restore-keys' option when no cache hit occurred for 'key', default false
-          use-repository-prefix: # optional, prefix the key and restore keys with repository name, default false
-          read-only: # optional, read only mode, do not save cache, default false
-          force-save: # optional, save cache even if key is matched, default false
+          retry: true # optional, enable retry on failure s3 operations, default false
 
           # actions/cache compatible properties: https://github.com/actions/cache
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
@@ -94,10 +87,64 @@ To restore from the cache only:
             node_modules
 ```
 
+To check if cache hits and size is not zero without downloading:
+
+```yaml
+      - name: Check cache
+        id: cache
+        uses: tespkg/actions-cache/check@v1
+        with:
+          accessKey: "Q3AM3UQ867SPQQA43P2F" # required
+          secretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG" # required
+          bucket: actions-cache # required
+          lookup-only: true
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          path: |
+            node_modules
+
+      - name: verify cache hit
+        env:
+          CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+          CACHE_SIZE: ${{ steps.cache.outputs.cache-size }}
+        run: |
+          echo "CACHE_HIT $CACHE_HIT"
+          echo "CACHE_SIZE $CACHE_SIZE"
+```
+
+
+## Outputs
+
+| Output | Description |
+|---|---|
+| `cache-hit` | A boolean value (`true`/`false`). `true` when an exact match is found for the primary `key`. |
+| `cache-size` | Size of the cache object found, measured in bytes. |
+| `cache-matched-key` | The key of the cache entry that was restored. On exact match this equals the input `key`. On a `restore-keys` prefix match this is the matched restore key. Empty string if no cache was found. |
+
 ## Restore keys
 
-`restore-keys` works similar to how github's `@actions/cache@v2` works: It search each item in `restore-keys`
+`restore-keys` works similar to how github's `@actions/cache@v5` works: It search each item in `restore-keys`
 as prefix in object names and use the latest one
+
+To restore from the cache using a `restore-key` prefix if the `key` restore fails:
+
+```yaml
+      - uses: tespkg/actions-cache/restore@v1
+        with:
+          accessKey: "Q3AM3UQ867SPQQA43P2F" # required
+          secretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG" # required
+          bucket: actions-cache # required
+          # actions/cache compatible properties: https://github.com/actions/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+            ${{ runner.os }}-
+          path: |
+            node_modules
+```
+
+If a match is found using one of the `restore-keys` options, then `cache-hit` will be FALSE but the
+`cache-matched-key` output will be set to the key that matched. See the
+[actions/cache](https://github.com/actions/cache/blob/main/restore/README.md#outputs) notes.
 
 ## Amazon S3 permissions
 
@@ -109,3 +156,18 @@ When using this with Amazon S3, the following permissions are necessary:
  - `s3:GetBucketLocation`
  - `s3:ListBucketMultipartUploads`
  - `s3:ListMultipartUploadParts`
+
+# Note on release
+
+This project follows semantic versioning. Backward incompatible changes will
+increase major version.
+
+There is also the `v1` compatible tag that's always pinned to the latest
+`v1.x.y` release.
+
+It's done using:
+
+```
+git tag -a v1 -f -m "v1 compatible release"
+git push -f --tags
+```
