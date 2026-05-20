@@ -4,8 +4,8 @@ This is Productboard's maintained fork of
 [tespkg/actions-cache](https://github.com/tespkg/actions-cache). The action
 enables caching dependencies to S3-compatible storage, e.g. MinIO or AWS S3.
 
-It also has GitHub [actions/cache@v5](https://github.com/actions/cache)
-fallback if S3 save and restore fails.
+It also has a GitHub [@actions/cache](https://github.com/actions/toolkit/tree/main/packages/cache)
+(v4) fallback if S3 save and restore fails.
 
 Productboard workflows should use the `pb` branch:
 
@@ -221,7 +221,7 @@ To check if cache hits and size is not zero without downloading:
 
 ## Restore keys
 
-`restore-keys` works similar to how github's `@actions/cache@v5` works: It search each item in `restore-keys`
+`restore-keys` works similar to how github's `@actions/cache` (v4) works: It search each item in `restore-keys`
 as prefix in object names and use the latest one
 
 To restore from the cache using a `restore-key` prefix if the `key` restore fails:
