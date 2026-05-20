@@ -1,8 +1,106 @@
-# actions-s3-cache
+# productboard/actions-cache
 
-This action enables caching dependencies to s3 compatible storage, e.g. minio, AWS S3
+This is Productboard's maintained fork of
+[tespkg/actions-cache](https://github.com/tespkg/actions-cache). The action
+enables caching dependencies to S3-compatible storage, e.g. MinIO or AWS S3.
 
-It also has github [actions/cache@v5](https://github.com/actions/cache) fallback if s3 save & restore fails
+It also has a GitHub [@actions/cache](https://github.com/actions/toolkit/tree/main/packages/cache)
+(v4) fallback if S3 save and restore fails.
+
+Productboard workflows should use the `pb` branch:
+
+```yaml
+- uses: productboard/actions-cache@pb
+```
+
+## Productboard fork maintenance
+
+### Branch model
+
+- `main` mirrors `upstream/main` from `tespkg/actions-cache`.
+- `pb` is Productboard's maintained branch and the default branch of this
+  repository.
+- Productboard changes live on `pb` as a small patch stack rebased on top of
+  `main`.
+- Normal pull requests must target `pb`, not `main`.
+- Do not merge upstream into `pb`. Rebase `pb` on top of `main` when upstream is
+  updated.
+- This fork does not run any GitHub Actions workflows. The upstream workflows
+  under `.github/workflows/` have been removed on `pb` because they were not
+  reliably triggered for this fork and produced no useful signal. Run tests and
+  the build locally instead (see below).
+
+### Contributing
+
+Start every Productboard change from `pb`:
+
+```bash
+git fetch --all --prune
+git switch -c <your-branch> origin/pb
+```
+
+Make the change, then run the checks and rebuild generated action artifacts:
+
+```bash
+yarn install --pure-lockfile
+yarn test
+yarn build
+```
+
+Commit source changes, tests, and generated files under `dist/` when they
+change. Open the pull request against `pb`.
+
+This fork does not use Productboard-specific tags. Do not create or move tags
+for testing a Productboard change. To test a change before it is merged, point
+the consuming workflow at your branch:
+
+```yaml
+- uses: productboard/actions-cache@<your-branch>
+```
+
+For sub-actions, use the same branch ref:
+
+```yaml
+- uses: productboard/actions-cache/restore@<your-branch>
+- uses: productboard/actions-cache/save@<your-branch>
+```
+
+After the pull request is merged, consuming workflows should go back to
+`productboard/actions-cache@pb`.
+
+### Updating from upstream
+
+Updating from upstream is a maintainer task. First, make `main` mirror the
+current upstream state:
+
+```bash
+git fetch --all --prune
+
+backup_branch=main-before-upstream-sync-$(date +%Y%m%d-%H%M%S)
+git branch "$backup_branch" origin/main
+git push origin "$backup_branch"
+
+git switch -C main upstream/main
+git push --force-with-lease origin main
+```
+
+Then rebase Productboard changes on top of the updated `main`:
+
+```bash
+git switch -C pb origin/pb
+git rebase origin/main
+
+yarn install --pure-lockfile
+yarn test
+yarn build
+
+git push --force-with-lease origin pb
+```
+
+If upstream has accepted a Productboard-specific fix, drop the duplicate commit
+during the rebase instead of keeping the same change twice. If conflicts touch
+`dist/`, resolve the source files first, run `yarn build`, and commit the
+generated output.
 
 ## Usage
 
@@ -20,7 +118,7 @@ jobs:
     runs-on: [ubuntu-latest]
 
     steps:
-      - uses: tespkg/actions-cache@v1
+      - uses: productboard/actions-cache@pb
         with:
           endpoint: play.min.io # optional, default s3.amazonaws.com
           insecure: false # optional, use http instead of https. default false
@@ -44,7 +142,7 @@ jobs:
 You can also set env instead of using `with`:
 
 ```yaml
-      - uses: tespkg/actions-cache@v1
+      - uses: productboard/actions-cache@pb
         env:
           AWS_ACCESS_KEY_ID: "Q3AM3UQ867SPQQA43P2F"
           AWS_SECRET_ACCESS_KEY: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
@@ -63,7 +161,7 @@ You can also set env instead of using `with`:
 To write to the cache only:
 
 ```yaml
-      - uses: tespkg/actions-cache/save@v1
+      - uses: productboard/actions-cache/save@pb
         with:
           accessKey: "Q3AM3UQ867SPQQA43P2F" # required
           secretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG" # required
@@ -77,7 +175,7 @@ To write to the cache only:
 To restore from the cache only:
 
 ```yaml
-      - uses: tespkg/actions-cache/restore@v1
+      - uses: productboard/actions-cache/restore@pb
         with:
           accessKey: "Q3AM3UQ867SPQQA43P2F" # required
           secretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG" # required
@@ -93,7 +191,7 @@ To check if cache hits and size is not zero without downloading:
 ```yaml
       - name: Check cache
         id: cache
-        uses: tespkg/actions-cache/check@v1
+        uses: productboard/actions-cache@pb
         with:
           accessKey: "Q3AM3UQ867SPQQA43P2F" # required
           secretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG" # required
@@ -123,13 +221,13 @@ To check if cache hits and size is not zero without downloading:
 
 ## Restore keys
 
-`restore-keys` works similar to how github's `@actions/cache@v5` works: It search each item in `restore-keys`
+`restore-keys` works similar to how github's `@actions/cache` (v4) works: It search each item in `restore-keys`
 as prefix in object names and use the latest one
 
 To restore from the cache using a `restore-key` prefix if the `key` restore fails:
 
 ```yaml
-      - uses: tespkg/actions-cache/restore@v1
+      - uses: productboard/actions-cache/restore@pb
         with:
           accessKey: "Q3AM3UQ867SPQQA43P2F" # required
           secretKey: "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG" # required
@@ -157,18 +255,3 @@ When using this with Amazon S3, the following permissions are necessary:
  - `s3:GetBucketLocation`
  - `s3:ListBucketMultipartUploads`
  - `s3:ListMultipartUploadParts`
-
-# Note on release
-
-This project follows semantic versioning. Backward incompatible changes will
-increase major version.
-
-There is also the `v1` compatible tag that's always pinned to the latest
-`v1.x.y` release.
-
-It's done using:
-
-```
-git tag -a v1 -f -m "v1 compatible release"
-git push -f --tags
-```
